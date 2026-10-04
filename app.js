@@ -79,8 +79,30 @@ function W(p) {
 const scaleR = (r) => S.where === 'city' ? r : r * Math.max(T.hereScale, 0.7);
 function sitePos(site) {
   const nudge = S.siteNudge[site.id];
-  const p = W(site.pos);
+  const p = (S.snap && S.snap.sites[site.id]) || W(site.pos);
   return nudge ? offset(p, nudge[0], nudge[1]) : p;
+}
+function sanctPos(i) { const sa = C.sanctuaries[i]; return (S.snap && S.snap.sanct[i]) || W([sa[0], sa[1]]); }
+// "Around me": move each folded site onto the nearest walkable street (so nothing lands in a reservoir).
+async function snapToStreets() {
+  if (S.where !== 'here' || !S.anchor || S.snap) return;
+  const [la, ln] = S.anchor, dLat = 0.012, dLng = 0.012 / Math.cos(rad(la));
+  const q = `[out:json][timeout:25];way[highway~"^(footway|pedestrian|path|living_street|residential|service|unclassified|tertiary|steps|secondary)$"][access!=private](${la - dLat},${ln - dLng},${la + dLat},${ln + dLng});node(w);out skel;`;
+  try {
+    let json = null;
+    for (const url of ['https://overpass-api.de/api/interpreter', 'https://overpass.private.coffee/api/interpreter', 'https://overpass.kumi.systems/api/interpreter']) {
+      try { const r = await fetch(url, { method: 'POST', body: 'data=' + encodeURIComponent(q), headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }); if (r.ok) { json = await r.json(); break; } } catch (e) {}
+    }
+    if (!json) return;
+    const nodes = (json.elements || []).filter((e) => e.type === 'node').map((e) => [e.lat, e.lon]);
+    if (nodes.length < 20) return;
+    const nearest = (p) => { let best = null, bd = Infinity; for (const n of nodes) { const d = dist(p, n); if (d < bd) { bd = d; best = n; } } return best; };
+    S.snap = { sites: {}, sanct: {} };
+    C.sites.forEach((site) => { S.snap.sites[site.id] = nearest(W(site.pos)); });
+    C.sanctuaries.forEach((sa, i) => { S.snap.sanct[i] = nearest(W([sa[0], sa[1]])); });
+    S.siteNudge = {}; save(); buildWorld();
+    toast('The case has settled onto your streets. Every seal is on a path you can walk.');
+  } catch (e) {}
 }
 function siteState(site) {
   if (S.status[site.id] === 'solved') return 'solved';
@@ -197,14 +219,14 @@ function startGPS() {
     const pos = [p.coords.latitude, p.coords.longitude];
     if (!live.gpsOK) {
       live.gpsOK = true;
-      if (S.where === 'here' && !S.anchor) { S.anchor = pos; save(); buildWorld(); }
+      if (S.where === 'here' && !S.anchor) { S.anchor = pos; save(); buildWorld(); snapToStreets(); }
       if (S.move === 'gps' || !live.player) { live.player = pos; live.map.setView(pos, 17); }
       if (S.move === 'gps' && S.where === 'city' && dist(pos, caseCentroid) > 5000) toast('You are far from Old Tbilisi. Pick Desk mode on the title screen to walk its streets from here.', 7000);
     }
     if (S.move === 'gps') live.player = pos;
   }, (err) => {
     if (S.move === 'gps') toast('Location is blocked, so desk mode is on. Allow location in Settings › Safari to play on foot.', 7000);
-    if (!live.player) { live.player = S.anchor || [1.2868, 103.8545]; if (S.where === 'here' && !S.anchor) { S.anchor = live.player.slice(); save(); buildWorld(); } live.map.setView(live.player, 17); }
+    if (!live.player) { live.player = S.anchor || [1.2868, 103.8545]; if (S.where === 'here' && !S.anchor) { S.anchor = live.player.slice(); save(); buildWorld(); snapToStreets(); } live.map.setView(live.player, 17); }
     if (S.move === 'gps') setDesk();
   }, { enableHighAccuracy: true, maximumAge: 2000, timeout: 20000 });
 }
@@ -240,8 +262,8 @@ function buildWorld() {
   Object.values(Ls).forEach((l) => { if (l && l.remove) l.remove(); });
   live.layers = {};
   const sanct = L.layerGroup().addTo(map);
-  C.sanctuaries.forEach(([la, ln, r, name]) => {
-    L.circle(W([la, ln]), { radius: scaleR(r), color: '#5fa08d', weight: 1, dashArray: '4 4', fillColor: '#5fa08d', fillOpacity: 0.12 }).bindTooltip(`${name} · sanctuary`).addTo(sanct);
+  C.sanctuaries.forEach(([la, ln, r, name], i) => {
+    L.circle(sanctPos(i), { radius: scaleR(r), color: '#5fa08d', weight: 1, dashArray: '4 4', fillColor: '#5fa08d', fillOpacity: 0.12 }).bindTooltip(`${name} · sanctuary`).addTo(sanct);
   });
   live.layers.sanct = sanct;
   live.layers.sites = L.layerGroup().addTo(map);
@@ -276,7 +298,7 @@ function makeDen(kind, name, home, patrol) {
   return den;
 }
 function inSanctuary(p) {
-  if (C.sanctuaries.some(([la, ln, r]) => dist(p, W([la, ln])) < scaleR(r))) return true;
+  if (C.sanctuaries.some(([la, ln, r], i) => dist(p, sanctPos(i)) < scaleR(r))) return true;
   if (live.shrine && dist(p, live.shrine) < T.reach + 10) return true;
   return C.sites.some((s) => S.status[s.id] === 'solved' && dist(p, sitePos(s)) < 20);
 }
@@ -720,6 +742,36 @@ function confirmReset() {
 }
 function resetCase() { try { localStorage.removeItem(SAVE_KEY); } catch (e) {} location.reload(); }
 
+// ---------- walk view (3D, over the shoulder) ----------
+function walkData() {
+  const P = live.player, now = Date.now();
+  return {
+    player: P,
+    heading: S.move === 'gps' ? live.heading : null,
+    dens: P ? live.dens.map((d, i) => ({ d, i })).filter(({ d }) => now >= d.banishedUntil && dist(P, d.pos) < T.sight).map(({ d, i }) => ({ id: i, kind: d.kind, pos: d.pos, hunting: d.mode === 'hunt' })) : [],
+    seals: C.sites.filter((s) => siteState(s) !== 'locked').map((s) => ({ id: s.id, sigil: s.sigil, svg: SIGILS[s.sigil], pos: sitePos(s), state: siteState(s) })),
+    sanctuaries: C.sanctuaries.map((sa, i) => ({ pos: sanctPos(i), r: scaleR(sa[2]) })),
+  };
+}
+function footstep() {
+  const A = live.audio; if (!A || !live.sound) return;
+  const { ctx } = A, t = ctx.currentTime;
+  const src = ctx.createBufferSource(); src.buffer = A.noiseBuf;
+  const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = rnd(700, 1300);
+  const g = ctx.createGain(); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(rnd(0.18, 0.26), t + 0.008); g.gain.exponentialRampToValueAtTime(0.001, t + 0.11);
+  src.connect(lp); lp.connect(g); g.connect(A.master); src.start(t, rnd(0, 1.5), 0.13);
+}
+function setView(v) {
+  live.view = v;
+  $('btnView').textContent = v === 'walk' ? 'MAP' : 'WALK';
+  if (v === 'walk') {
+    RivenWalk.show({ getData: walkData, onStep: footstep, onTap: (p) => { if (S.move === 'desk' && !live.overlayOpen) live.target = p; } });
+  } else {
+    RivenWalk.hide(); setTimeout(() => live.map.invalidateSize(), 50);
+  }
+  try { localStorage.setItem('riven_view', v); } catch (e) {}
+}
+
 // ---------- loop ----------
 function tick(now) {
   const dt = live.lastTick ? Math.min(1, (now - live.lastTick) / 1000) : 0; live.lastTick = now;
@@ -751,6 +803,9 @@ function start(resume) {
   live.map.setView(live.player || W(caseCentroid), 17);
   live.dens.forEach(denVoice);
   live.wardUntil = Date.now() + 60000; // a minute's grace while you get your bearings
+  snapToStreets();
+  let v = 'map'; try { v = localStorage.getItem('riven_view') || 'map'; } catch (e) {}
+  if (v === 'walk') setView('walk');
   setInterval(() => tick(performance.now()), 200);
   if (!resume) {
     showOverlay([
@@ -780,12 +835,13 @@ function boot() {
   $('liveClose').onclick = closeLive;
   $('fovMinus').onclick = () => { $('fovVal').textContent = `${RivenAR.nudgeFov(-2)}°`; };
   $('fovPlus').onclick = () => { $('fovVal').textContent = `${RivenAR.nudgeFov(2)}°`; };
-  $('btnCenter').onclick = () => { live.follow = true; if (live.player) live.map.setView(live.player, 18); };
+  $('btnCenter').onclick = () => { live.follow = true; if (live.view === 'walk') RivenWalk.recenter(); else if (live.player) live.map.setView(live.player, 18); };
+  $('btnView').onclick = () => setView(live.view === 'walk' ? 'map' : 'walk');
   $('btnLead').onclick = () => { leadIdx++; const s = currentLead(); if (s) { live.follow = false; live.map.flyTo(sitePos(s), 17); } };
   $('btnSpeed').onclick = () => { live.speed = live.speed === 1 ? 4 : live.speed === 4 ? 12 : 1; $('btnSpeed').textContent = `Walk ${live.speed}×`; };
   $('btnSound').onclick = () => { live.sound = !live.sound; $('btnSound').classList.toggle('off', !live.sound); if (!live.sound) live.dens.forEach((d) => d.voice?.out.gain.setTargetAtTime(0, live.audio.ctx.currentTime, 0.1)); if (live.audio?.ctx.state === 'suspended') live.audio.ctx.resume(); };
   // debug hook for QA
-  window.__riven = { live, get S() { return S; }, solve: (id) => solveSite(C.sites.find((s) => s.id === id)), puzzle: (id) => showPuzzle(C.sites.find((s) => s.id === id)), look: () => openLive('look'), get L() { return LV; }, C };
+  window.__riven = { live, get S() { return S; }, solve: (id) => solveSite(C.sites.find((s) => s.id === id)), puzzle: (id) => showPuzzle(C.sites.find((s) => s.id === id)), look: () => openLive('look'), view: (v) => setView(v), walk: () => RivenWalk.state, get L() { return LV; }, C };
 }
 boot();
 })();

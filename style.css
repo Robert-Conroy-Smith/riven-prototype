@@ -21,6 +21,11 @@ button:focus-visible { outline: 2px solid var(--sulfur); outline-offset: 2px; }
 [hidden] { display: none !important; }
 
 #map { position: fixed; inset: 0; background: var(--ink); }
+#walk { position: fixed; inset: 0; background: #0a0f0d; touch-action: none; }
+#walk .maplibregl-ctrl-attrib { background: rgba(13,19,17,.7) !important; color: var(--paper-dim); font-size: 9px; }
+#walk .maplibregl-ctrl-attrib a { color: var(--paper-dim) !important; }
+#walk .maplibregl-ctrl-bottom-right { bottom: 200px; }
+.icon-btn.view { color: var(--sulfur); border-color: var(--sulfur); }
 .leaflet-container { background: var(--ink); font-family: var(--body); }
 .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) grayscale(.55) sepia(.5) hue-rotate(35deg) brightness(.62) contrast(1.15); }
 .leaflet-control-attribution { background: rgba(13,19,17,.7) !important; color: var(--paper-dim) !important; font-size: 9px; }

@@ -10,10 +10,12 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral+SC:wght@500;700&family=Spectral:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.css">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <div id="map"></div>
+<div id="walk" hidden></div>
 
 <!-- HUD -->
 <header id="hud" hidden>
@@ -22,6 +24,7 @@
     <div class="case-name" id="hudCase">The Cold Springs of Tbili</div>
     <div class="case-prog" id="hudProg">0 / 7 seals</div>
   </div>
+  <button class="icon-btn view" id="btnView" aria-label="Switch view">WALK</button>
   <button class="icon-btn" id="btnSound" aria-label="Toggle sound">SND</button>
 </header>
 <div id="hunted" hidden>HUNTED</div>
@@ -99,8 +102,11 @@
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<script src="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js"></script>
 <script src="case.js"></script>
 <script src="live.js"></script>
+<script src="walk.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

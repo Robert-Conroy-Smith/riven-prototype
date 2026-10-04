@@ -256,5 +256,5 @@ window.RivenAR = (() => {
   // A direction in front of wherever the phone points now (for placing fixed anchors).
   function currentFacing() { if (!camera) return 0; updateCamera(); return facing(); }
 
-  return { open, close, setMode, askPermission, nudgeFov, currentFacing, get fov() { return fov; }, isOpen: () => !!opts };
+  return { textures: { ghoul: ghoulTexture, sigil: sigilTexture }, open, close, setMode, askPermission, nudgeFov, currentFacing, get fov() { return fov; }, isOpen: () => !!opts };
 })();
