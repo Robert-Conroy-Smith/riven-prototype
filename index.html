@@ -38,6 +38,7 @@
   </div>
   <button class="primary" id="btnOpen" hidden>Open the reliquary</button>
   <div class="sheet-btns">
+    <button id="btnLook" class="look">Look</button>
     <button id="btnCase">Casebook</button>
     <button id="btnCenter">Find me</button>
     <button id="btnLead">Next lead</button>
@@ -76,22 +77,30 @@
   <div class="ov-inner" id="ovInner"></div>
 </section>
 
-<!-- AR seek -->
-<section id="ar" class="screen" hidden>
-  <video id="arVideo" playsinline muted autoplay></video>
-  <div id="arDark"></div>
-  <div id="arSigil"><svg viewBox="0 0 100 100" id="arSigilSvg"></svg></div>
-  <div id="arReticle"><svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="44" class="ring-bg"/><circle cx="50" cy="50" r="44" class="ring-fill" id="arFill"/></svg></div>
-  <div id="arArrowL">‹</div><div id="arArrowR">›</div>
-  <div class="ar-text">
-    <div id="arTitle">Find the seal</div>
-    <div id="arSub">Turn slowly. Hold it in the ring.</div>
+<!-- Live view: camera + world-anchored 3D -->
+<section id="live" class="screen" hidden>
+  <video id="liveVideo" playsinline muted autoplay></video>
+  <div id="liveShade"></div>
+  <div id="liveGL"></div>
+  <div id="liveLabels"></div>
+  <div id="liveReticle" hidden><svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="44" class="ring-bg"/><circle cx="50" cy="50" r="44" class="ring-fill" id="liveFill"/></svg></div>
+  <div id="liveArrowL" class="live-arrow" hidden>‹</div><div id="liveArrowR" class="live-arrow" hidden>›</div>
+  <div class="live-top">
+    <div id="liveStatus">Looking</div>
+    <div class="live-fov"><button id="fovMinus" aria-label="Narrower">−</button><span id="fovVal">63°</span><button id="fovPlus" aria-label="Wider">+</button></div>
   </div>
-  <button class="ghost ar-cancel" id="arCancel">Back to the map</button>
+  <div class="live-bottom">
+    <div id="liveTitle">Look around</div>
+    <div id="liveSub">Things in the old town appear where they really are.</div>
+    <div class="live-btns" id="liveBtns"></div>
+    <button class="ghost" id="liveClose">Back to the map</button>
+  </div>
 </section>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="case.js"></script>
+<script src="live.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

@@ -412,59 +412,96 @@ const SIGILS = {
   tower: '<circle cx="50" cy="50" r="40" fill="none" stroke="#d8c25a" stroke-width="4"/><path d="M34 74 V36 h6 v-8 h6 v8 h8 v-8 h6 v8 h6 V74 Z" fill="none" stroke="#d8c25a" stroke-width="5" stroke-linejoin="round"/>',
   sword: '<circle cx="50" cy="50" r="40" fill="none" stroke="#d8c25a" stroke-width="4"/><path d="M50 18 V70 M38 62 H62 M50 70 v10" stroke="#d8c25a" stroke-width="6" stroke-linecap="round"/>',
 };
-let arState = null;
-async function arSeek(site) {
-  return new Promise(async (resolve) => {
-    const ar = $('ar'); ar.hidden = false; live.overlayOpen = true;
-    $('arSigilSvg').innerHTML = SIGILS[site.sigil] || SIGILS.spring;
-    $('arTitle').textContent = `Find seal ${site.num}`;
-    const useCompass = S.move === 'gps' && live.heading != null;
-    $('arSub').textContent = useCompass ? 'Turn your body slowly. Hold the seal in the ring.' : 'Swipe to look around. Hold the seal in the ring.';
-    const video = $('arVideo'); let stream = null;
-    if (S.move === 'gps' && navigator.mediaDevices?.getUserMedia) {
-      try { stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false }); video.srcObject = stream; await video.play().catch(() => {}); } catch (e) { stream = null; }
-    }
-    $('arDark').classList.toggle('novideo', !stream); video.hidden = !stream;
-    const target = ((live.heading ?? 0) + rnd(70, 290)) % 360; // never straight ahead
-    let dragOff = 0, lastX = null, hold = 0, last = performance.now(), done = false;
-    const FOV = 60;
-    const onDown = (e) => { lastX = (e.touches ? e.touches[0] : e).clientX; };
-    const onMove = (e) => { if (lastX == null) return; const x = (e.touches ? e.touches[0] : e).clientX; dragOff -= (x - lastX) * FOV / ar.clientWidth; lastX = x; };
-    const onUp = () => { lastX = null; };
-    ar.addEventListener('pointerdown', onDown); ar.addEventListener('pointermove', onMove); ar.addEventListener('pointerup', onUp); ar.addEventListener('pointercancel', onUp);
-    const finish = (ok) => {
-      if (done) return; done = true;
-      ar.removeEventListener('pointerdown', onDown); ar.removeEventListener('pointermove', onMove); ar.removeEventListener('pointerup', onUp); ar.removeEventListener('pointercancel', onUp);
-      stream?.getTracks().forEach((t) => t.stop()); video.srcObject = null;
-      ar.hidden = true; live.overlayOpen = false; resolve(ok);
-    };
-    $('arCancel').onclick = () => finish(false);
-    const frame = (t) => {
-      if (done) return;
-      const dt = Math.min(0.1, (t - last) / 1000); last = t;
-      const view = ((useCompass ? live.heading : 0) + dragOff + 360) % 360;
-      const diff = norm180(target - view);
-      const x = (diff / FOV) * ar.clientWidth;
-      const tilt = Math.sin(t / 900) * 10;
-      $('arSigil').style.transform = `translate(${x}px, ${tilt}px)`;
-      $('arArrowL').hidden = diff > -FOV / 2; $('arArrowR').hidden = diff < FOV / 2;
-      if (Math.abs(diff) < 9) hold = Math.min(2.5, hold + dt); else hold = Math.max(0, hold - dt * 2);
-      $('arFill').style.strokeDashoffset = 276.5 * (1 - hold / 2.5);
-      if (hold >= 2.5) { chime(true); if (navigator.vibrate) navigator.vibrate(60); setTimeout(() => finish(true), 300); return; }
-      requestAnimationFrame(frame);
-    };
-    requestAnimationFrame(frame);
-  });
+// ---------- live view (camera + world-pinned 3D) ----------
+// look: ghouls and seals appear where they really are around you; seek: a seal is pinned
+// somewhere beside or behind you and you turn to find it.
+let LV = null;
+function denObjects() {
+  const P = live.player; if (!P) return [];
+  const now = Date.now();
+  return live.dens.map((d, i) => ({ d, i, m: dist(P, d.pos) })).filter(({ d, m }) => now >= d.banishedUntil && m < T.sight).map(({ d, i, m }) => ({
+    id: 'den' + i, kind: d.kind, bearing: bearing(P, d.pos), dist: m, hunting: d.mode === 'hunt',
+    label: `${d.mode === 'hunt' ? 'HUNTING · ' : ''}${KIND[d.kind].label} · ${Math.round(m)} m`,
+  }));
+}
+function sealObjects() {
+  const P = live.player; if (!P) return [];
+  return openSites().map((s) => ({ s, m: dist(P, sitePos(s)) })).filter(({ m }) => m < 400).map(({ s, m }) => ({
+    id: 'seal' + s.id, kind: 'seal', sigil: s.sigil, svg: SIGILS[s.sigil], bearing: bearing(P, sitePos(s)), dist: m, label: `Seal ${s.num} · ${fmtDist(m)}`,
+  }));
+}
+function liveObjects() {
+  if (!LV) return [];
+  if (LV.mode === 'seek') return LV.target ? [LV.target] : [];
+  return [...denObjects(), ...sealObjects(), ...LV.tests];
+}
+function reachableSeal() {
+  const P = live.player; if (!P) return null;
+  return openSites().find((s) => dist(P, sitePos(s)) <= T.reach) || null;
+}
+function openLive(mode, site) {
+  LV = { mode, site: site || null, tests: [], target: null, t0: performance.now(), uiKey: '', gyro: false, facing: 0 };
+  if (mode === 'seek') { live.overlayOpen = true; live.shrine = sitePos(site); }
+  $('fovVal').textContent = `${RivenAR.fov}°`;
+  renderLiveUI(true);
+  RivenAR.open({ mode, getObjects: liveObjects, onFound: liveFound, onFrame: liveFrame });
+}
+function closeLive() {
+  if (!LV) return;
+  const wasSeek = LV.mode === 'seek';
+  RivenAR.close(); LV = null;
+  if (wasSeek) { live.overlayOpen = false; live.shrine = null; }
+}
+function seekWithinLive(site) { // already looking: switch to finding this seal without restarting the camera
+  LV.mode = 'seek'; LV.site = site; LV.target = null; LV.t0 = performance.now();
+  live.overlayOpen = true; live.shrine = sitePos(site);
+  RivenAR.setMode({ mode: 'seek' }); renderLiveUI(true);
+}
+function liveFound() {
+  const site = LV && LV.site;
+  chime(true); if (navigator.vibrate) navigator.vibrate(60);
+  setTimeout(() => { closeLive(); if (site) { live.shrine = sitePos(site); showPuzzle(site); } }, 250);
+}
+function liveFrame(info) {
+  if (!LV) return;
+  LV.gyro = info.gyro; LV.facing = info.facing;
+  if (LV.mode === 'seek' && !LV.target && (info.gyro || performance.now() - LV.t0 > 900)) {
+    const side = Math.random() < 0.5 ? -1 : 1;
+    LV.target = { id: 'target', kind: 'anchor', sigil: LV.site.sigil, svg: SIGILS[LV.site.sigil], bearing: (info.facing + side * rnd(70, 150) + 360) % 360, dist: 3, elev: rnd(-0.3, 0.8), fixed: true, target: true };
+  }
+  $('live').classList.toggle('hunted', LV.mode === 'look' && live.huntedBy.size > 0);
+  renderLiveUI(false);
+}
+function renderLiveUI(force) {
+  const reach = LV.mode === 'look' ? reachableSeal() : null;
+  const dens = LV.mode === 'look' ? denObjects() : [];
+  const key = [LV.mode, LV.gyro, reach && reach.id, LV.tests.length, dens.length, dens.filter((d) => d.hunting).length].join('|');
+  if (!force && key === LV.uiKey) return;
+  LV.uiKey = key;
+  $('liveStatus').textContent = LV.gyro ? 'Gyro on · pinned to the world' : 'No gyro · swipe to look';
+  const btns = $('liveBtns'); btns.innerHTML = '';
+  if (LV.mode === 'seek') {
+    $('liveTitle').textContent = `Find seal ${LV.site.num}`;
+    $('liveSub').textContent = LV.gyro ? 'It is pinned somewhere beside or behind you. Turn slowly, tilt up and down. Hold it in the ring.' : 'Swipe to look around. Hold the seal in the ring.';
+    return;
+  }
+  const hunting = dens.filter((d) => d.hunting).length;
+  $('liveTitle').textContent = hunting ? 'Something is hunting you' : dens.length ? `${dens.length} in sight` : 'Nothing in sight';
+  $('liveSub').textContent = dens.length ? 'They stand where they really are. Watch them move.' : `Ghouls show up here inside ${T.sight} m. Summon a test one to try it in your room.`;
+  if (reach) btns.append(el('button', { class: 'primary', onclick: () => seekWithinLive(reach) }, `Open seal ${reach.num}`));
+  btns.append(el('button', { onclick: () => {
+    const n = LV.tests.length, side = Math.random() < 0.5 ? -1 : 1;
+    LV.tests.push({ id: 'test' + n, kind: n % 2 ? 'devi' : 'ali', fixed: true, dist: rnd(3, 5), bearing: (LV.facing + side * rnd(60, 150) + 360) % 360, label: 'Test · pinned here' });
+    toast(`A test ${n % 2 ? 'Devi' : 'Ali'} is standing somewhere ${side < 0 ? 'to your left' : 'to your right'}. Turn to find it.`);
+    renderLiveUI(true);
+  } }, 'Summon a test ghoul'));
+  if (LV.tests.length) btns.append(el('button', { onclick: () => { LV.tests = []; renderLiveUI(true); } }, 'Clear tests'));
 }
 
 // ---------- site flow ----------
-async function beginSite(site) {
+function beginSite(site) {
   if (siteState(site) !== 'open') return;
-  live.shrine = sitePos(site); // working a reliquary lights the spot; denizens keep off
-  const ok = await arSeek(site);
-  if (!ok) { live.shrine = null; return; }
-  live.shrine = sitePos(site);
-  showPuzzle(site);
+  openLive('seek', site); // working a reliquary lights the spot; denizens keep off
 }
 function puzzleShell(site, body) {
   return [
@@ -739,12 +776,16 @@ function boot() {
   $('btnBegin').onclick = () => { S = freshState(choice.where, choice.move); save(); start(false); };
   $('btnContinue').onclick = () => { S = saved; start(true); };
   $('btnCase').onclick = casebook;
+  $('btnLook').onclick = () => { RivenAR.askPermission(); openLive('look'); };
+  $('liveClose').onclick = closeLive;
+  $('fovMinus').onclick = () => { $('fovVal').textContent = `${RivenAR.nudgeFov(-2)}°`; };
+  $('fovPlus').onclick = () => { $('fovVal').textContent = `${RivenAR.nudgeFov(2)}°`; };
   $('btnCenter').onclick = () => { live.follow = true; if (live.player) live.map.setView(live.player, 18); };
   $('btnLead').onclick = () => { leadIdx++; const s = currentLead(); if (s) { live.follow = false; live.map.flyTo(sitePos(s), 17); } };
   $('btnSpeed').onclick = () => { live.speed = live.speed === 1 ? 4 : live.speed === 4 ? 12 : 1; $('btnSpeed').textContent = `Walk ${live.speed}×`; };
   $('btnSound').onclick = () => { live.sound = !live.sound; $('btnSound').classList.toggle('off', !live.sound); if (!live.sound) live.dens.forEach((d) => d.voice?.out.gain.setTargetAtTime(0, live.audio.ctx.currentTime, 0.1)); if (live.audio?.ctx.state === 'suspended') live.audio.ctx.resume(); };
   // debug hook for QA
-  window.__riven = { live, get S() { return S; }, solve: (id) => solveSite(C.sites.find((s) => s.id === id)), puzzle: (id) => showPuzzle(C.sites.find((s) => s.id === id)), C };
+  window.__riven = { live, get S() { return S; }, solve: (id) => solveSite(C.sites.find((s) => s.id === id)), puzzle: (id) => showPuzzle(C.sites.find((s) => s.id === id)), look: () => openLive('look'), get L() { return LV; }, C };
 }
 boot();
 })();
