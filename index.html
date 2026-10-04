@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0d1311">
+<title>Riven</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral+SC:wght@500;700&family=Spectral:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="map"></div>
+
+<!-- HUD -->
+<header id="hud" hidden>
+  <div class="candles" id="candles" aria-label="Candles"></div>
+  <div class="hud-mid">
+    <div class="case-name" id="hudCase">The Cold Springs of Tbili</div>
+    <div class="case-prog" id="hudProg">0 / 7 seals</div>
+  </div>
+  <button class="icon-btn" id="btnSound" aria-label="Toggle sound">SND</button>
+</header>
+<div id="hunted" hidden>HUNTED</div>
+<div id="toast" hidden></div>
+
+<section id="sheet" hidden>
+  <div class="lead-row">
+    <div class="compass" id="leadArrow"><svg viewBox="0 0 40 40"><path d="M20 4 L27 30 L20 25 L13 30 Z"/></svg></div>
+    <div class="lead-text">
+      <div class="lead-label" id="leadLabel">Nearest lead</div>
+      <div class="lead-name" id="leadName">—</div>
+      <div class="lead-dist" id="leadDist">—</div>
+    </div>
+  </div>
+  <button class="primary" id="btnOpen" hidden>Open the reliquary</button>
+  <div class="sheet-btns">
+    <button id="btnCase">Casebook</button>
+    <button id="btnCenter">Find me</button>
+    <button id="btnLead">Next lead</button>
+    <button id="btnSpeed" hidden>Walk 1×</button>
+  </div>
+  <div class="desk-hint" id="deskHint" hidden>Desk mode: tap the map to walk there.</div>
+</section>
+
+<!-- Title -->
+<section id="title" class="screen">
+  <div class="title-inner">
+    <div class="eyebrow">A city mystery played on foot</div>
+    <h1>Riven</h1>
+    <div class="case-title">Case I · The Cold Springs of Tbili</div>
+    <p class="premise" id="premise"></p>
+    <div class="choose">
+      <div class="choose-label">Where are you playing?</div>
+      <div class="seg" id="segWhere">
+        <button data-v="city" class="on">Old Tbilisi<span>Real sites, ~3.5 km walk</span></button>
+        <button data-v="here">Around me<span>The case folded onto your streets</span></button>
+      </div>
+      <div class="choose-label">How are you moving?</div>
+      <div class="seg" id="segMove">
+        <button data-v="gps" class="on">On foot<span>GPS, compass, camera</span></button>
+        <button data-v="desk">Desk mode<span>Tap the map to walk</span></button>
+      </div>
+    </div>
+    <button class="primary big" id="btnBegin">Begin the night</button>
+    <button class="ghost" id="btnContinue" hidden>Continue saved case</button>
+    <p class="fine">Wear earphones. The things that walk tonight can be heard before they are seen. Churches are sanctuary.</p>
+  </div>
+</section>
+
+<!-- Generic overlay -->
+<section id="overlay" class="screen" hidden>
+  <div class="ov-inner" id="ovInner"></div>
+</section>
+
+<!-- AR seek -->
+<section id="ar" class="screen" hidden>
+  <video id="arVideo" playsinline muted autoplay></video>
+  <div id="arDark"></div>
+  <div id="arSigil"><svg viewBox="0 0 100 100" id="arSigilSvg"></svg></div>
+  <div id="arReticle"><svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="44" class="ring-bg"/><circle cx="50" cy="50" r="44" class="ring-fill" id="arFill"/></svg></div>
+  <div id="arArrowL">‹</div><div id="arArrowR">›</div>
+  <div class="ar-text">
+    <div id="arTitle">Find the seal</div>
+    <div id="arSub">Turn slowly. Hold it in the ring.</div>
+  </div>
+  <button class="ghost ar-cancel" id="arCancel">Back to the map</button>
+</section>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="case.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
