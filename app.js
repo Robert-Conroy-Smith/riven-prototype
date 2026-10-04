@@ -763,7 +763,7 @@ function footstep() {
 }
 function setView(v) {
   live.view = v;
-  $('btnView').textContent = v === 'walk' ? 'MAP' : 'WALK';
+  $('btnView').textContent = v === 'walk' ? 'MAP VIEW' : '3D VIEW';
   if (v === 'walk') {
     RivenWalk.show({ getData: walkData, onStep: footstep, onTap: (p) => { if (S.move === 'desk' && !live.overlayOpen) live.target = p; } });
   } else {
@@ -804,7 +804,7 @@ function start(resume) {
   live.dens.forEach(denVoice);
   live.wardUntil = Date.now() + 60000; // a minute's grace while you get your bearings
   snapToStreets();
-  let v = 'map'; try { v = localStorage.getItem('riven_view') || 'map'; } catch (e) {}
+  let v = 'walk'; try { v = localStorage.getItem('riven_view') || 'walk'; } catch (e) {}
   if (v === 'walk') setView('walk');
   setInterval(() => tick(performance.now()), 200);
   if (!resume) {

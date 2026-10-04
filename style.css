@@ -25,7 +25,7 @@ button:focus-visible { outline: 2px solid var(--sulfur); outline-offset: 2px; }
 #walk .maplibregl-ctrl-attrib { background: rgba(13,19,17,.7) !important; color: var(--paper-dim); font-size: 9px; }
 #walk .maplibregl-ctrl-attrib a { color: var(--paper-dim) !important; }
 #walk .maplibregl-ctrl-bottom-right { bottom: 200px; }
-.icon-btn.view { color: var(--sulfur); border-color: var(--sulfur); }
+.icon-btn.view { color: var(--ink); background: var(--sulfur); border-color: var(--sulfur); padding: 0 10px; box-shadow: 0 0 16px rgba(216,194,90,.45); }
 .leaflet-container { background: var(--ink); font-family: var(--body); }
 .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) grayscale(.55) sepia(.5) hue-rotate(35deg) brightness(.62) contrast(1.15); }
 .leaflet-control-attribution { background: rgba(13,19,17,.7) !important; color: var(--paper-dim) !important; font-size: 9px; }
