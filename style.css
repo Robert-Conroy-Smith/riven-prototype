@@ -47,6 +47,9 @@ button:focus-visible { outline: 2px solid var(--sulfur); outline-offset: 2px; }
 .mk-den.banished { opacity: .25; }
 .mk-den .eye::after { content: ''; display: block; width: 8px; height: 3px; margin: 11px auto 0; background: #ffd9c9; border-radius: 50%; }
 .mk-den.devi .eye::after { margin-top: 15px; width: 12px; }
+.mk-hunter { display: grid; place-items: center; filter: drop-shadow(0 0 6px rgba(240,165,74,.8)) drop-shadow(0 2px 2px #000); }
+.mk-hunter.medico { filter: drop-shadow(0 0 8px rgba(194,69,47,.95)) drop-shadow(0 2px 2px #000); }
+.mk-hunter.medico.chasing { animation: throb .45s ease-in-out infinite; }
 @keyframes pulse { 50% { box-shadow: 0 0 24px rgba(216,194,90,.95); } }
 @keyframes throb { 50% { transform: scale(1.2); } }
 

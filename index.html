@@ -55,13 +55,20 @@
   <div class="title-inner">
     <div class="eyebrow">A city mystery played on foot</div>
     <h1>Riven</h1>
-    <div class="case-title">Case I · The Cold Springs of Tbili</div>
+    <div class="case-title" id="caseTitle">Trial walk · Havelock to Tiong Bahru</div>
     <p class="premise" id="premise"></p>
     <div class="choose">
+      <div class="choose-label">Which game?</div>
+      <div class="seg" id="segCase">
+        <button data-v="trial" class="on">Trial walk<span>55 Havelock Rd to Tiong Bahru Plaza, ~840 m</span></button>
+        <button data-v="tbilisi">Tbilisi case<span>The Cold Springs of Tbili</span></button>
+      </div>
+      <div id="whereBlock" hidden>
       <div class="choose-label">Where are you playing?</div>
       <div class="seg" id="segWhere">
         <button data-v="city" class="on">Old Tbilisi<span>Real sites, ~3.5 km walk</span></button>
         <button data-v="here">Around me<span>The case folded onto your streets</span></button>
+      </div>
       </div>
       <div class="choose-label">How are you moving?</div>
       <div class="seg" id="segMove">
@@ -71,7 +78,7 @@
     </div>
     <button class="primary big" id="btnBegin">Begin the night</button>
     <button class="ghost" id="btnContinue" hidden>Continue saved case</button>
-    <p class="fine">Wear earphones. The things that walk tonight can be heard before they are seen. Churches are sanctuary.</p>
+    <p class="fine" id="titleFine">Wear earphones: you can hear the hunters before you see them. Keep this page open with the screen on while you walk.</p>
   </div>
 </section>
 
@@ -105,6 +112,7 @@
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
 <script src="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js"></script>
 <script src="case.js"></script>
+<script src="case_trial.js"></script>
 <script src="live.js"></script>
 <script src="walk.js"></script>
 <script src="app.js"></script>

@@ -66,6 +66,12 @@ window.RivenWalk = (() => {
         'fill-extrusion-opacity': 0.88,
       } });
     }
+    const rt = opts && opts.getData().route;
+    if (rt && !map.getSource('riven-route')) {
+      map.addSource('riven-route', { type: 'geojson', data: { type: 'Feature', geometry: { type: 'LineString', coordinates: rt.map((p) => [p[1], p[0]]) } } });
+      map.addLayer({ id: 'riven-route', type: 'line', source: 'riven-route', layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: { 'line-color': '#d8c25a', 'line-width': ['interpolate', ['linear'], ['zoom'], 16, 2, 20, 7], 'line-opacity': 0.75, 'line-dasharray': [0.6, 1.6] } });
+    }
     try { map.setSky({ 'sky-color': '#0b1512', 'horizon-color': '#2b3a30', 'fog-color': '#0d1311', 'sky-horizon-blend': 0.6, 'horizon-fog-blend': 0.6, 'fog-ground-blend': 0.55, 'atmosphere-blend': 0 }); } catch (e) {}
     if (!map.getLayer('riven-3d')) map.addLayer(customLayer);
   }
@@ -160,7 +166,7 @@ window.RivenWalk = (() => {
   // ---------- world things: ghouls, seals, sanctuaries ----------
   function ghoulMesh(kind) {
     const t = texCache['g' + kind] || (texCache['g' + kind] = window.RivenAR.textures.ghoul(kind));
-    const h = (kind === 'devi' ? 3.0 : 2.4) * AV_SCALE * 0.85, w = h / 2;
+    const h = (kind === 'devi' ? 3.0 : kind === 'medico' ? 2.7 : 2.4) * AV_SCALE * 0.85, w = h / 2;
     const g = new THREE.PlaneGeometry(w, h); g.translate(0, h / 2, 0);
     const mesh = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ map: t, transparent: true, depthWrite: false, side: THREE.DoubleSide }));
     const grp = new THREE.Group(); grp.add(mesh); grp.userData.face = mesh; return grp;
@@ -173,6 +179,12 @@ window.RivenWalk = (() => {
     const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.35 * AV_SCALE, 0.55 * AV_SCALE, 160, 20, 1, true), new THREE.MeshBasicMaterial({ color: 0xd8c25a, transparent: true, opacity: 0.16, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }));
     beam.position.y = 80; grp.add(beam); grp.userData.beam = beam;
     return grp;
+  }
+  function coneMesh(range, half) {
+    const g = new THREE.CircleGeometry(range, 28, rad(90 - half), rad(2 * half));
+    const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: 0xf0a54a, transparent: true, opacity: 0.3, depthWrite: false, side: THREE.DoubleSide }));
+    m.rotation.x = -Math.PI / 2;
+    const grp = new THREE.Group(); grp.add(m); return grp; // no userData.face: cones are not billboards
   }
   function sanctMesh(r) {
     const m = new THREE.Mesh(new THREE.PlaneGeometry(r * 2, r * 2), new THREE.MeshBasicMaterial({ map: ringTex(), transparent: true, depthWrite: false }));
@@ -194,6 +206,10 @@ window.RivenWalk = (() => {
     (data.dens || []).forEach((d) => {
       const o = put('de' + d.id + d.kind, () => ghoulMesh(d.kind), d.pos, (d.kind === 'ali' ? 0.4 : 0) + Math.sin(t / 500 + d.id) * 0.15);
       o.userData.face.material.opacity = d.hunting ? 0.7 + 0.3 * Math.sin(t / 60) : 0.95;
+      if (d.cone) { // a sentry's lantern beam on the ground
+        const c = put('co' + d.id + ':' + d.cone.range + ':' + d.cone.half, () => coneMesh(d.cone.range, d.cone.half), d.pos, 0.09);
+        c.rotation.y = -rad(d.cone.heading);
+      }
     });
     things.forEach((o, id) => {
       if (!seen.has(id)) { scene.remove(o); things.delete(id); return; }

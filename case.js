@@ -173,3 +173,6 @@ window.CASE = {
     },
   ],
 };
+
+window.CASES = window.CASES || {};
+window.CASES.tbilisi = window.CASE;

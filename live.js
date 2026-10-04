@@ -38,10 +38,50 @@ window.RivenAR = (() => {
     };
     // ghost-light aura so they read against a dark street
     const aura = g.createRadialGradient(128, 230, 10, 128, 260, 250);
+    if (kind === 'medico') { aura.addColorStop(0, 'rgba(194,69,47,0.32)'); aura.addColorStop(1, 'rgba(194,69,47,0)'); } else
     aura.addColorStop(0, 'rgba(150,210,190,0.38)'); aura.addColorStop(0.5, 'rgba(110,170,150,0.14)'); aura.addColorStop(1, 'rgba(110,170,150,0)');
     g.fillStyle = aura; g.fillRect(0, 0, 256, 512);
     g.shadowColor = 'rgba(170,230,210,0.7)'; g.shadowBlur = 22;
-    if (kind === 'devi') { // the many-headed ogre: hulking body, three heads
+    if (kind === 'volto' || kind === 'medico') { // the Masque: black cloak, hat, porcelain mask
+      g.shadowBlur = 0;
+      const cloak = (top, w) => {
+        const grd = g.createLinearGradient(0, top, 0, 512);
+        grd.addColorStop(0, '#15130f'); grd.addColorStop(0.75, '#0c0b09'); grd.addColorStop(1, 'rgba(12,11,9,0.2)');
+        g.fillStyle = grd; g.beginPath();
+        g.moveTo(128 - w * 0.22, top); g.quadraticCurveTo(128 - w * 0.55, 300, 128 - w * 0.5, 508); g.lineTo(128 + w * 0.5, 508);
+        g.quadraticCurveTo(128 + w * 0.55, 300, 128 + w * 0.22, top); g.closePath(); g.fill();
+        g.strokeStyle = 'rgba(201,160,74,0.55)'; g.lineWidth = 3; g.stroke(); // gold edging
+      };
+      if (kind === 'volto') {
+        cloak(150, 190);
+        // lantern held out to the right
+        g.save(); g.shadowColor = '#f0a54a'; g.shadowBlur = 30; g.fillStyle = '#ffd08a';
+        g.fillRect(196, 262, 26, 34); g.restore();
+        g.strokeStyle = '#3a2a14'; g.lineWidth = 4; g.strokeRect(196, 262, 26, 34); g.beginPath(); g.moveTo(209, 262); g.lineTo(200, 220); g.stroke();
+        // tricorn
+        g.fillStyle = '#0b0a08'; g.beginPath(); g.moveTo(62, 92); g.quadraticCurveTo(128, 30, 194, 92); g.quadraticCurveTo(128, 70, 62, 92); g.fill();
+        g.beginPath(); g.ellipse(128, 80, 44, 30, 0, Math.PI, 0); g.fill();
+        // blank white volto with gold trim
+        g.fillStyle = '#f3eee2'; g.strokeStyle = '#c9a04a'; g.lineWidth = 5;
+        g.beginPath(); g.moveTo(128, 88); g.bezierCurveTo(88, 88, 84, 130, 90, 158); g.bezierCurveTo(98, 196, 116, 214, 128, 214);
+        g.bezierCurveTo(140, 214, 158, 196, 166, 158); g.bezierCurveTo(172, 130, 168, 88, 128, 88); g.fill(); g.stroke();
+        g.fillStyle = '#0d1311'; [[110, 138], [146, 138]].forEach(([x, y]) => { g.beginPath(); g.ellipse(x, y, 11, 5, 0, 0, Math.PI * 2); g.fill(); });
+        g.strokeStyle = '#9a9488'; g.lineWidth = 2; g.beginPath(); g.moveTo(116, 188); g.quadraticCurveTo(128, 193, 140, 188); g.stroke();
+      } else {
+        cloak(140, 230);
+        // wide-brim hat
+        g.fillStyle = '#0b0a08'; g.beginPath(); g.ellipse(128, 78, 92, 20, 0, 0, Math.PI * 2); g.fill();
+        g.fillRect(84, 22, 88, 58);
+        g.fillStyle = '#5a1a12'; g.fillRect(84, 66, 88, 9);
+        // beaked mask, beak pointing down and out
+        g.fillStyle = '#f3eee2'; g.strokeStyle = '#c9a04a'; g.lineWidth = 5;
+        g.beginPath(); g.moveTo(92, 96); g.quadraticCurveTo(128, 84, 164, 96); g.lineTo(162, 150);
+        g.quadraticCurveTo(150, 190, 132, 268); g.lineTo(124, 268); g.quadraticCurveTo(106, 190, 94, 150); g.closePath(); g.fill(); g.stroke();
+        g.save(); g.shadowColor = '#ff3b1f'; g.shadowBlur = 22; g.fillStyle = '#c2452f';
+        [[110, 124], [146, 124]].forEach(([x, y]) => { g.beginPath(); g.arc(x, y, 12, 0, Math.PI * 2); g.fill(); }); g.restore();
+        g.strokeStyle = '#c9a04a'; g.lineWidth = 3; [[110, 124], [146, 124]].forEach(([x, y]) => { g.beginPath(); g.arc(x, y, 13, 0, Math.PI * 2); g.stroke(); });
+      }
+    } else if (kind === 'devi') { // the many-headed ogre: hulking body, three heads
       body(128, 150, 240, 362);
       [[70, 120, 0.8], [128, 92, 1], [186, 120, 0.8]].forEach(([x, y, s]) => {
         g.fillStyle = 'rgba(14,18,16,0.97)'; g.beginPath(); g.ellipse(x, y, 34 * s, 40 * s, 0, 0, Math.PI * 2); g.fill();
@@ -186,7 +226,7 @@ window.RivenAR = (() => {
         s.sprite.scale.set(size, size, 1);
       } else {
         r = o.fixed ? o.dist : Math.max(5, Math.min(35, o.dist));
-        const tall = (o.kind === 'devi' ? 2.8 : 2.2) * Math.max(1, r / 10);
+        const tall = (o.kind === 'devi' ? 2.8 : o.kind === 'medico' ? 2.5 : 2.2) * Math.max(1, r / 10);
         size = tall;
         y = -1.5 + wob * 0.05 * tall + (o.kind === 'ali' ? 0.15 * tall : 0); // Ali float a little off the ground
         s.sprite.scale.set(tall * 0.5, tall, 1);

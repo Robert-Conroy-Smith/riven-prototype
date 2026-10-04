@@ -1,8 +1,9 @@
 (() => {
 'use strict';
-const C = window.CASE;
+let C = window.CASE;
 const $ = (id) => document.getElementById(id);
-const SAVE_KEY = 'riven_cold_springs_v1';
+let SAVE_KEY = 'riven_cold_springs_v1';
+const saveKeyFor = (c) => c.type === 'trial' ? 'riven_' + c.id : 'riven_cold_springs_v1';
 
 // ---------- tuning ----------
 const T = {
@@ -67,10 +68,16 @@ function save() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } cat
 function load() { try { return JSON.parse(localStorage.getItem(SAVE_KEY)); } catch (e) { return null; } }
 
 // World geometry: either real Tbilisi or the case folded around an anchor point.
-const caseCentroid = (() => {
-  const pts = C.sites.map((s) => s.pos);
+function centroidOf(c) {
+  const pts = c.route || c.sites.map((s) => s.pos);
   return [pts.reduce((a, p) => a + p[0], 0) / pts.length, pts.reduce((a, p) => a + p[1], 0) / pts.length];
-})();
+}
+let caseCentroid = centroidOf(C);
+function chooseCase(id) {
+  C = window.CASES[id] || window.CASE; caseCentroid = centroidOf(C); SAVE_KEY = saveKeyFor(C); routeCum = null;
+  T.reach = C.type === 'trial' ? 60 : 35; // the plaza is a big building; GPS indoors is loose
+}
+const isTrial = () => C.type === 'trial';
 function W(p) {
   if (S.where === 'city' || !S.anchor) return p;
   const [n, e] = enu(caseCentroid, p);
@@ -130,7 +137,8 @@ function renderCandles() {
 }
 function renderHud() {
   renderCandles();
-  $('hudProg').textContent = `${solvedCount()} / ${C.sites.length} seals broken`;
+  $('hudCase').textContent = C.title;
+  $('hudProg').textContent = isTrial() ? (S.ended ? 'Made it' : `Spotted ${S.spotted || 0}× · get to the plaza`) : `${solvedCount()} / ${C.sites.length} seals broken`;
 }
 
 // ---------- audio (procedural; no files) ----------
@@ -151,7 +159,7 @@ function denVoice(den) {
   const { ctx } = A;
   const out = ctx.createGain(); out.gain.value = 0;
   const pan = ctx.createStereoPanner ? ctx.createStereoPanner() : null;
-  if (den.kind === 'ali') { // breathy whisper: band-passed noise, wobbling
+  if (den.kind === 'ali' || den.kind === 'volto') { // breathy whisper: band-passed noise, wobbling
     const src = ctx.createBufferSource(); src.buffer = A.noiseBuf; src.loop = true;
     const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 1800; bp.Q.value = 2.5;
     const lfo = ctx.createOscillator(); lfo.frequency.value = rnd(0.25, 0.6);
@@ -220,8 +228,8 @@ function startGPS() {
     if (!live.gpsOK) {
       live.gpsOK = true;
       if (S.where === 'here' && !S.anchor) { S.anchor = pos; save(); buildWorld(); snapToStreets(); }
-      if (S.move === 'gps' || !live.player) { live.player = pos; live.map.setView(pos, 17); }
-      if (S.move === 'gps' && S.where === 'city' && dist(pos, caseCentroid) > 5000) toast('You are far from Old Tbilisi. Pick Desk mode on the title screen to walk its streets from here.', 7000);
+      if (S.move === 'gps' || !live.player) { live.player = pos; live.map.setView(pos, isTrial() ? 18 : 17); }
+      if (S.move === 'gps' && S.where === 'city' && dist(pos, caseCentroid) > 5000) toast(isTrial() ? 'You are far from the trial route. Pick Desk mode on the title screen to walk it from here.' : 'You are far from Old Tbilisi. Pick Desk mode on the title screen to walk its streets from here.', 7000);
     }
     if (S.move === 'gps') live.player = pos;
   }, (err) => {
@@ -236,7 +244,8 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden && S)
 function setDesk() {
   S.move = 'desk'; save();
   if (!live.player) {
-    if (S.where === 'city') live.player = [41.68935, 44.80930]; // Meidan square, between the first two leads
+    if (isTrial()) live.player = C.start.slice();
+    else if (S.where === 'city') live.player = [41.68935, 44.80930]; // Meidan square, between the first two leads
     else if (S.anchor) live.player = S.anchor.slice();
     // else: wait for the first GPS fix to fold the case around you
   }
@@ -271,7 +280,7 @@ function buildWorld() {
   live.layers.target = L.polyline([], { color: '#f0a54a', weight: 2, dashArray: '2 8', opacity: 0.7 }).addTo(map);
   live.layers.player = L.marker(live.player || caseCentroid, { icon: L.divIcon({ className: '', html: '<div class="mk-player"><div class="cone" id="cone"></div></div>', iconSize: [22, 22], iconAnchor: [11, 11] }), interactive: false, zIndexOffset: 1000 }).addTo(map);
   drawSites();
-  spawnDens();
+  if (isTrial()) { drawRoute(); spawnTrial(); } else spawnDens();
 }
 function drawSites() {
   const g = live.layers.sites; g.clearLayers();
@@ -432,6 +441,7 @@ const SIGILS = {
   vine: '<circle cx="50" cy="50" r="40" fill="none" stroke="#d8c25a" stroke-width="4"/><path d="M50 20 V80 M34 40 H66 M34 40 l-4 8 M66 40 l4 8" fill="none" stroke="#d8c25a" stroke-width="6" stroke-linecap="round"/>',
   clock: '<circle cx="50" cy="50" r="40" fill="none" stroke="#d8c25a" stroke-width="4"/><circle cx="50" cy="50" r="26" fill="none" stroke="#d8c25a" stroke-width="3"/><path d="M50 50 V32 M50 50 L62 56" stroke="#d8c25a" stroke-width="5" stroke-linecap="round"/>',
   tower: '<circle cx="50" cy="50" r="40" fill="none" stroke="#d8c25a" stroke-width="4"/><path d="M34 74 V36 h6 v-8 h6 v8 h8 v-8 h6 v8 h6 V74 Z" fill="none" stroke="#d8c25a" stroke-width="5" stroke-linejoin="round"/>',
+  card: '<rect x="26" y="16" width="48" height="68" rx="4" fill="#0d1311" stroke="#d8c25a" stroke-width="4"/><text x="50" y="62" text-anchor="middle" font-family="Georgia,serif" font-size="34" font-weight="700" fill="#d8c25a">7</text>',
   sword: '<circle cx="50" cy="50" r="40" fill="none" stroke="#d8c25a" stroke-width="4"/><path d="M50 18 V70 M38 62 H62 M50 70 v10" stroke="#d8c25a" stroke-width="6" stroke-linecap="round"/>',
 };
 // ---------- live view (camera + world-pinned 3D) ----------
@@ -440,6 +450,7 @@ const SIGILS = {
 let LV = null;
 function denObjects() {
   const P = live.player; if (!P) return [];
+  if (isTrial()) return trialObjects(P);
   const now = Date.now();
   return live.dens.map((d, i) => ({ d, i, m: dist(P, d.pos) })).filter(({ d, m }) => now >= d.banishedUntil && m < T.sight).map(({ d, i, m }) => ({
     id: 'den' + i, kind: d.kind, bearing: bearing(P, d.pos), dist: m, hunting: d.mode === 'hunt',
@@ -540,6 +551,7 @@ function showPuzzle(site) {
   live.shrine = sitePos(site);
 }
 function solveSite(site) {
+  if (isTrial()) return trialEnd();
   S.status[site.id] = 'solved';
   S.solvedOrder.push(site.id);
   site.evidence.forEach((e) => { if (!S.evidence.includes(e.text)) S.evidence.push(e.text); (e.strikes || []).forEach((k) => (S.marks[k] = 'auto')); });
@@ -559,6 +571,7 @@ function solveSite(site) {
 
 // ---------- puzzles ----------
 const PUZZLES = {
+  finish(site, win) { setTimeout(win, 0); return el('div', {}); },
   rings(site, win) {
     const marks = ['F', 'P', 'S'], names = ['falcon', 'pheasant', 'spring'];
     const rot = [rnd(1, 7) | 0, rnd(1, 7) | 0, rnd(1, 7) | 0]; // 8 steps of 45°
@@ -710,6 +723,26 @@ function ending() {
 
 // ---------- casebook ----------
 function casebook() {
+  if (isTrial()) {
+    const mins = Math.round((Date.now() - S.started) / 60000);
+    return showOverlay([
+      el('div', { class: 'ov-head' }, el('div', { class: 'ov-num' }, 'TRIAL WALK'), el('h2', { class: 'ov-title' }, C.title), el('div', { class: 'ov-place' }, C.city)),
+      el('p', { class: 'ov-text' }, C.premise),
+      el('div', { class: 'section-label' }, 'So far'),
+      el('ul', { class: 'evidence' },
+        el('li', {}, `${mins} min on the street`),
+        el('li', {}, `Spotted by sentries: ${S.spotted || 0}`),
+        el('li', {}, `Caught by Schneebley: ${S.bossCatches || 0}`),
+        el('li', {}, `Sentries on the streets now: ${live.dens.filter((d) => d.kind === 'volto').length}`)),
+      el('div', { class: 'section-label' }, 'How the hunters work'),
+      el('ul', { class: 'evidence' },
+        el('li', {}, 'White-masked sentries guard parts of the route. Their lantern beam is the amber cone. Walk into it and you lose a flame.'),
+        el('li', {}, 'Some walk back and forth, some stand and sweep. Wait for the beam to swing away, or go round another street.'),
+        el('li', {}, 'A new sentry appears ahead of you every few minutes.'),
+        el('li', {}, 'Schneebley, the beaked one, heads for wherever you were last seen. Getting spotted tells him exactly where you are. Every few minutes he hears a rough rumour too.')),
+      el('div', { class: 'ov-btns' }, el('button', { class: 'primary', onclick: hideOverlay }, 'Back to the street'), el('button', { class: 'ghost', onclick: confirmReset }, 'Restart the walk')),
+    ]);
+  }
   const kids = [el('div', { class: 'ov-head' }, el('div', { class: 'ov-num' }, 'CASEBOOK'), el('h2', { class: 'ov-title' }, C.title), el('div', { class: 'ov-place' }, C.city))];
   kids.push(el('p', { class: 'ov-text' }, C.premise));
   kids.push(el('div', { class: 'section-label' }, 'Seals'));
@@ -742,13 +775,190 @@ function confirmReset() {
 }
 function resetCase() { try { localStorage.removeItem(SAVE_KEY); } catch (e) {} location.reload(); }
 
+// ---------- trial walk: sentries with lantern cones + Schneebley ----------
+let routeCum = null;
+function routeTables() {
+  if (routeCum) return routeCum;
+  const r = C.route, cum = [0];
+  for (let i = 1; i < r.length; i++) cum.push(cum[i - 1] + dist(r[i - 1], r[i]));
+  return (routeCum = cum);
+}
+function along(d) { // -> [pos, bearing of the route there]
+  const r = C.route, cum = routeTables(), total = cum[cum.length - 1];
+  d = Math.max(0, Math.min(total, d));
+  let i = 1; while (i < cum.length - 1 && cum[i] < d) i++;
+  const seg = cum[i] - cum[i - 1] || 1, k = (d - cum[i - 1]) / seg;
+  const a = r[i - 1], b = r[i];
+  return [[a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k], bearing(a, b)];
+}
+function progressOf(P) { // metres along the route of the nearest route point
+  const r = C.route, cum = routeTables(); let best = 0, bd = Infinity;
+  for (let i = 0; i < r.length; i++) { const d = dist(P, r[i]); if (d < bd) { bd = d; best = cum[i]; } }
+  return best;
+}
+const ICON_VOLTO = '<svg viewBox="0 0 40 48" width="22" height="26"><path d="M20 2C8 2 4 14 6 26c2 12 8 20 14 20s12-8 14-20C36 14 32 2 20 2z" fill="#f2ede0" stroke="#c9a04a" stroke-width="2.5"/><ellipse cx="13" cy="20" rx="4.5" ry="2.4" fill="#0d1311"/><ellipse cx="27" cy="20" rx="4.5" ry="2.4" fill="#0d1311"/><path d="M15 34q5 2 10 0" stroke="#8a857a" stroke-width="1.5" fill="none"/></svg>';
+const ICON_MEDICO = '<svg viewBox="0 0 52 52" width="44" height="44"><ellipse cx="22" cy="12" rx="20" ry="5" fill="#0d1311" stroke="#c2452f" stroke-width="1.5"/><rect x="11" y="2" width="22" height="10" rx="2" fill="#0d1311"/><path d="M8 16q12-4 22 2l20 20-22-7q-14 2-20-7z" fill="#f2ede0" stroke="#c9a04a" stroke-width="2"/><circle cx="17" cy="20" r="3.4" fill="#c2452f"/></svg>';
+function hunterIcon(kind, chasing) {
+  return L.divIcon({ className: '', html: `<div class="mk-hunter ${kind}${chasing ? ' chasing' : ''}">${kind === 'medico' ? ICON_MEDICO : ICON_VOLTO}</div>`, iconSize: kind === 'medico' ? [44, 44] : [22, 26], iconAnchor: kind === 'medico' ? [22, 22] : [11, 13] });
+}
+function conePoints(d) {
+  const pts = [d.pos];
+  for (let k = -d.half; k <= d.half; k += d.half / 6) { const b = rad(d.heading + k); pts.push(offset(d.pos, Math.cos(b) * d.range, Math.sin(b) * d.range)); }
+  return pts;
+}
+function makeSentry(cfg) {
+  const d = { kind: 'volto', name: 'Sentry', mode: cfg.mode, range: 28, half: 35, speed: 0.8, dir: 1, banishedUntil: 0, voice: null };
+  if (cfg.mode === 'pace') { d.a = cfg.from; d.b = cfg.to; d.s = rnd(cfg.from, cfg.to); }
+  else { d.at = cfg.at; d.sweep = cfg.sweep || 150; d.period = cfg.period || 9; d.phase = rnd(0, 6); const [p, b] = along(cfg.at); d.pos = p; d.base = b + 90; }
+  if (cfg.mode === 'pace') { const [p, b] = along(d.s); d.pos = p; d.heading = b; } else d.heading = d.base;
+  d.cone = L.polygon(conePoints(d), { color: '#f0a54a', weight: 1, opacity: 0.8, fillColor: '#f0a54a', fillOpacity: 0.38, interactive: false }).addTo(live.layers.dens);
+  d.marker = L.marker(d.pos, { icon: hunterIcon('volto'), interactive: false, zIndexOffset: 500 }).addTo(live.layers.dens);
+  if (live.audio) denVoice(d);
+  return d;
+}
+function spawnTrial() {
+  live.dens.forEach((d) => { try { d.voice?.out.disconnect(); } catch (e) {} });
+  live.dens = C.patrols.map(makeSentry);
+  const b = offset(C.start, C.boss.from[0], C.boss.from[1]);
+  const boss = { kind: 'medico', name: C.boss.name, pos: b, mode: 'track', lastKnown: C.start.slice(), wp: null, inCatch: 0, banishedUntil: 0, voice: null };
+  boss.marker = L.marker(b, { icon: hunterIcon('medico'), interactive: false, zIndexOffset: 900 }).addTo(live.layers.dens);
+  if (live.audio) denVoice(boss);
+  live.dens.push(boss); live.boss = boss;
+  live.nextRumour = Date.now() + 150000;
+  live.nextSentry = Date.now() + C.escalate.every * 1000;
+}
+function drawRoute() {
+  live.layers.route = L.layerGroup().addTo(live.map);
+  L.polyline(C.route, { color: '#d8c25a', weight: 3, opacity: 0.55, dashArray: '2 9', interactive: false }).addTo(live.layers.route);
+  const s = C.start;
+  L.circleMarker(s, { radius: 6, color: '#5fa08d', weight: 2, fillOpacity: 0.3 }).bindTooltip('Start · 55 Havelock Rd').addTo(live.layers.route);
+}
+function spotted(by, now) {
+  live.wardUntil = now + 20000; // 20 s of grace to get clear
+  S.spotted = (S.spotted || 0) + 1; S.candles = Math.max(0, S.candles - 1); save(); renderCandles(); renderHud(); chime(false);
+  if (navigator.vibrate) navigator.vibrate([150, 60, 150, 60, 300]);
+  if (live.boss) { live.boss.lastKnown = live.player.slice(); live.boss.mode = 'track'; }
+  if (S.candles === 0) return outOfFlames(now, 'A sentry\'s lantern found you one time too many');
+  toast(`A sentry saw you. One flame out. Schneebley knows exactly where you are now. 20 seconds to get clear.`, 6500);
+}
+function outOfFlames(now, why) {
+  live.recoverUntil = now + 60000;
+  showOverlay([
+    el('div', { class: 'ov-head' }, el('div', { class: 'ov-num' }, 'ALL FLAMES OUT'), el('h2', { class: 'ov-title' }, why)),
+    el('p', { class: 'ov-text' }, 'Your lantern is dark. Stand still for a minute while it relights. Nothing can see you until it does.\n\nThe walk carries on from where you are.'),
+    el('div', { class: 'ov-btns' }, el('button', { class: 'primary', onclick: hideOverlay }, 'Back to the street')),
+  ]);
+  setTimeout(() => { S.candles = 3; save(); renderCandles(); toast('Your lantern is lit again.'); }, 60000);
+}
+function stepTrial(dt, now) {
+  const P = live.player; if (!P) return;
+  const t = now / 1000, safe = now < live.wardUntil || now < live.recoverUntil;
+  const elapsedMin = (now - S.started) / 60000;
+  // escalation: a new sentry somewhere ahead of you
+  if (now > live.nextSentry) {
+    live.nextSentry = now + C.escalate.every * 1000;
+    const sentries = live.dens.filter((d) => d.kind === 'volto').length;
+    const total = routeTables()[routeTables().length - 1];
+    if (sentries < C.escalate.cap) {
+      const s0 = Math.min(total - 40, progressOf(P) + rnd(70, 220));
+      if (s0 > 40) {
+        const d = makeSentry(Math.random() < 0.5 ? { mode: 'pace', from: s0 - 30, to: s0 + 30 } : { mode: 'sweep', at: s0, sweep: 150, period: rnd(7, 11) });
+        live.dens.splice(live.dens.length - 1, 0, d);
+        toast('Another masked sentry has taken up a post on the streets ahead.', 5000);
+      }
+    }
+  }
+  let hunted = false;
+  for (const d of live.dens) {
+    if (d.kind === 'volto') {
+      if (d.mode === 'pace') {
+        d.s += d.dir * d.speed * dt;
+        if (d.s > d.b) { d.s = d.b; d.dir = -1; } if (d.s < d.a) { d.s = d.a; d.dir = 1; }
+        const [p, b] = along(d.s); d.pos = p; d.heading = d.dir > 0 ? b : (b + 180) % 360;
+      } else d.heading = (d.base + (d.sweep / 2) * Math.sin(2 * Math.PI * (t / d.period) + d.phase) + 360) % 360;
+      d.marker.setLatLng(d.pos); d.cone.setLatLngs(conePoints(d));
+      if (!safe && !live.overlayOpen) {
+        const m = dist(d.pos, P);
+        if (m < d.range && Math.abs(norm180(bearing(d.pos, P) - d.heading)) < d.half) { spotted(d, now); return; }
+      }
+    } else { // Schneebley
+      const speed = Math.min(2.0, 0.9 + 0.1 * elapsedMin);
+      if (now < d.banishedUntil) { d.marker.setLatLng(d.pos); continue; }
+      const m = dist(d.pos, P);
+      if (!safe && m < 30) { d.lastKnown = P.slice(); d.mode = 'chase'; }       // close enough to see you: direct pursuit
+      else if (d.mode === 'chase') d.mode = 'track';
+      if (now > live.nextRumour) {                                               // a rough rumour of where you are
+        live.nextRumour = now + 150000;
+        const b = rnd(0, 360); d.lastKnown = offset(P, Math.cos(rad(b)) * rnd(20, 60), Math.sin(rad(b)) * rnd(20, 60)); d.mode = 'track';
+        toast('Schneebley has heard a rumour of where you are. He is coming this way.', 5000);
+      }
+      let target = d.lastKnown || d.wp;
+      if (!target || dist(d.pos, target) < 5) {
+        if (d.lastKnown) { d.searchAround = d.lastKnown; d.lastKnown = null; }
+        const c = d.searchAround || d.pos, b = rnd(0, 360), r = rnd(15, 60);
+        d.wp = offset(c, Math.cos(rad(b)) * r, Math.sin(rad(b)) * r); target = d.wp;
+      }
+      d.pos = moveToward(d.pos, target, (d.lastKnown ? speed : speed * 0.6) * dt);
+      d.marker.setLatLng(d.pos);
+      const el2 = d.marker.getElement()?.firstChild; if (el2) el2.classList.toggle('chasing', d.mode === 'chase');
+      if (d.mode === 'chase') hunted = true;
+      if (!safe && !live.overlayOpen && m < 10) {
+        d.inCatch += dt;
+        if (d.inCatch >= 2) {
+          d.inCatch = 0; S.bossCatches = (S.bossCatches || 0) + 1;
+          const b = rnd(0, 360); d.pos = offset(P, Math.cos(rad(b)) * 250, Math.sin(rad(b)) * 250); d.lastKnown = null; d.searchAround = null; d.mode = 'track';
+          d.banishedUntil = now + 15000; live.wardUntil = now + 25000;
+          S.candles = Math.max(0, S.candles - 1); save(); renderCandles(); renderHud(); chime(false);
+          if (navigator.vibrate) navigator.vibrate([400, 100, 400]);
+          if (S.candles === 0) outOfFlames(now, 'Schneebley caught you');
+          else toast('Schneebley caught you. One flame out. He has been driven off for now, but he will be back.', 6500);
+        }
+      } else d.inCatch = Math.max(0, d.inCatch - dt);
+    }
+    // proximity audio
+    if (d.voice && live.audio) {
+      const dp = dist(d.pos, P), hear = d.kind === 'medico' ? 260 : 120;
+      const vol = live.sound && dp < hear ? Math.pow(1 - dp / hear, 2) * (d.kind === 'medico' ? 0.9 : 0.35) * (d.mode === 'chase' ? 1.4 : 1) : 0;
+      d.voice.out.gain.setTargetAtTime(vol, live.audio.ctx.currentTime, 0.4);
+      if (d.voice.pan) d.voice.pan.pan.setTargetAtTime(Math.max(-1, Math.min(1, Math.sin(rad(norm180(bearing(P, d.pos) - (live.heading ?? 0)))))), live.audio.ctx.currentTime, 0.3);
+    }
+  }
+  live.huntedBy = new Set(hunted ? [live.boss] : []);
+  $('hunted').hidden = !hunted || live.overlayOpen;
+  if (hunted && live.audio && now > live.audio.nextBeat) { beat(); live.audio.nextBeat = now + 850; }
+}
+function trialObjects(P) {
+  return live.dens.map((d, i) => ({ d, i, m: dist(P, d.pos) })).filter(({ m }) => m < 600).map(({ d, i, m }) => ({
+    id: 'den' + i, kind: d.kind, bearing: bearing(P, d.pos), dist: m, hunting: d.kind === 'medico' && d.mode === 'chase',
+    label: d.kind === 'medico' ? `${d.mode === 'chase' ? 'HUNTING · ' : ''}Schneebley · ${Math.round(m)} m` : `Sentry · ${Math.round(m)} m`,
+  }));
+}
+function trialEnd() {
+  S.ended = 'made-it'; S.endedAt = Date.now(); save(); renderHud(); chime(true);
+  const mins = Math.round((Date.now() - S.started) / 60000);
+  showOverlay([
+    el('div', { class: 'ov-head' }, el('div', { class: 'ov-num' }, 'YOU MADE IT'), el('h2', { class: 'ov-title' }, 'Le Chiffre\'s last card')),
+    el('p', { class: 'ov-text' }, 'Tucked behind the gym\'s front desk: a small black card with a single number on it. 7. The Masque lower their lanterns and melt back into the side streets. Schneebley is nowhere to be seen. For now.'),
+    el('div', { class: 'section-label' }, 'Your walk'),
+    el('ul', { class: 'evidence' },
+      el('li', {}, `${mins} minutes from Havelock Road`),
+      el('li', {}, `${S.candles} of 3 flames still lit`),
+      el('li', {}, `Spotted by sentries: ${S.spotted || 0}`),
+      el('li', {}, `Caught by Schneebley: ${S.bossCatches || 0}`)),
+    el('div', { class: 'ov-btns' }, el('button', { class: 'primary', onclick: hideOverlay }, 'Back to the street'), el('button', { class: 'ghost', onclick: resetCase }, 'Walk it again')),
+  ]);
+}
+
 // ---------- walk view (3D, over the shoulder) ----------
 function walkData() {
   const P = live.player, now = Date.now();
   return {
     player: P,
     heading: S.move === 'gps' ? live.heading : null,
-    dens: P ? live.dens.map((d, i) => ({ d, i })).filter(({ d }) => now >= d.banishedUntil && dist(P, d.pos) < T.sight).map(({ d, i }) => ({ id: i, kind: d.kind, pos: d.pos, hunting: d.mode === 'hunt' })) : [],
+    route: isTrial() ? C.route : null,
+    dens: !P ? [] : isTrial()
+      ? live.dens.map((d, i) => ({ id: i, kind: d.kind, pos: d.pos, hunting: d.kind === 'medico' && d.mode === 'chase', cone: d.kind === 'volto' ? { heading: d.heading, range: d.range, half: d.half } : null }))
+      : live.dens.map((d, i) => ({ d, i })).filter(({ d }) => now >= d.banishedUntil && dist(P, d.pos) < T.sight).map(({ d, i }) => ({ id: i, kind: d.kind, pos: d.pos, hunting: d.mode === 'hunt' })),
     seals: C.sites.filter((s) => siteState(s) !== 'locked').map((s) => ({ id: s.id, sigil: s.sigil, svg: SIGILS[s.sigil], pos: sitePos(s), state: siteState(s) })),
     sanctuaries: C.sanctuaries.map((sa, i) => ({ pos: sanctPos(i), r: scaleR(sa[2]) })),
   };
@@ -788,8 +998,8 @@ function tick(now) {
     }
     const cone = document.getElementById('cone');
     if (cone) { const h = S.move === 'gps' ? live.heading : (live.target ? bearing(live.player, live.target) : null); cone.style.display = h == null ? 'none' : ''; if (h != null) cone.style.transform = `rotate(${h}deg)`; }
-    if (!live.overlayOpen) stepDens(dt, Date.now());
-    lingerCheck(Date.now());
+    if (isTrial()) { if (!live.overlayOpen) stepTrial(dt, Date.now()); }
+    else { if (!live.overlayOpen) stepDens(dt, Date.now()); lingerCheck(Date.now()); }
     updateSheet();
   }
 }
@@ -800,14 +1010,21 @@ function start(resume) {
   startGPS();
   if (S.where === 'here' && S.anchor) live.player = live.player || S.anchor.slice();
   buildWorld(); renderHud();
-  live.map.setView(live.player || W(caseCentroid), 17);
+  if (isTrial() && !live.player) live.map.fitBounds(L.latLngBounds(C.route), { padding: [40, 40] });
+  else live.map.setView(live.player || W(caseCentroid), isTrial() ? 18 : 17);
   live.dens.forEach(denVoice);
   live.wardUntil = Date.now() + 60000; // a minute's grace while you get your bearings
   snapToStreets();
   let v = 'walk'; try { v = localStorage.getItem('riven_view') || 'walk'; } catch (e) {}
   if (v === 'walk') setView('walk');
   setInterval(() => tick(performance.now()), 200);
-  if (!resume) {
+  if (!resume && isTrial()) {
+    showOverlay([
+      el('div', { class: 'ov-head' }, el('div', { class: 'ov-num' }, 'TRIAL WALK'), el('h2', { class: 'ov-title' }, 'Get to Tiong Bahru Plaza unseen')),
+      el('p', { class: 'ov-text' }, `Follow the dotted line, or find your own way.\n\nWhite masks are sentries. Their lantern beam is the amber cone on the map and on the street. Step into it and you lose a flame, and Schneebley learns exactly where you are. Some sentries pace back and forth; some stand and sweep. Time it, or go round.\n\nThe red beaked mask is Schneebley. He heads for wherever you were last seen and gets faster the longer you're out. If he gets within about 10 m for two seconds, he takes a flame.\n\nA new sentry appears ahead of you every few minutes. You have three flames and one minute of grace to start. Keep the screen on.`),
+      el('div', { class: 'ov-btns' }, el('button', { class: 'primary', onclick: hideOverlay }, 'Go')),
+    ]);
+  } else if (!resume) {
     showOverlay([
       el('div', { class: 'ov-head' }, el('div', { class: 'ov-num' }, 'NIGHTFALL'), el('h2', { class: 'ov-title' }, 'Two leads to start')),
       el('p', { class: 'ov-text' }, `The bath-keeper at ${C.sites[0].name} saw it happen. Someone scratched a message onto the king's statue at ${C.sites[1].name}.\n\nWalk to a glowing seal. Within ${T.reach} m you can open its reliquary: find it through your camera, then break it.\n\nRed eyes are Ali and the Devi. You hear them first; earphones help, and the sound comes from the side they're on. If one hunts you, run or get onto holy ground (the green rings). Don't idle in one spot for long. Three candles. Lose them all and you sit out two minutes.`),
@@ -818,17 +1035,29 @@ function start(resume) {
 
 // ---------- boot ----------
 function boot() {
-  $('premise').textContent = C.premise;
   initMap();
-  const choice = { where: 'city', move: 'gps' };
-  [['segWhere', 'where'], ['segMove', 'move']].forEach(([id, key]) => {
+  const choice = { caseId: 'trial', where: 'city', move: 'gps' };
+  let saved = null;
+  const applyCase = () => {
+    chooseCase(choice.caseId);
+    $('premise').textContent = C.premise;
+    $('caseTitle').textContent = isTrial() ? 'Trial walk · Havelock to Tiong Bahru' : 'Case I · The Cold Springs of Tbili';
+    $('whereBlock').hidden = isTrial();
+    if (isTrial()) choice.where = 'city';
+    saved = load();
+    const ok = saved && saved.status && !saved.ended;
+    $('btnContinue').hidden = !ok;
+    if (ok) $('btnContinue').textContent = isTrial() ? 'Continue the walk' : `Continue: ${Object.values(saved.status).filter((v) => v === 'solved').length} seals broken`;
+    $('btnBegin').textContent = isTrial() ? 'Start the walk' : 'Begin the night';
+  };
+  [['segCase', 'caseId'], ['segWhere', 'where'], ['segMove', 'move']].forEach(([id, key]) => {
     $(id).querySelectorAll('button').forEach((b) => b.addEventListener('click', () => {
       choice[key] = b.dataset.v; $(id).querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b));
+      if (key === 'caseId') applyCase();
     }));
   });
-  const saved = load();
-  if (saved && saved.status) { $('btnContinue').hidden = false; $('btnContinue').textContent = `Continue: ${Object.values(saved.status).filter((v) => v === 'solved').length} seals broken`; }
-  $('btnBegin').onclick = () => { S = freshState(choice.where, choice.move); save(); start(false); };
+  applyCase();
+  $('btnBegin').onclick = () => { S = freshState(choice.where, choice.move); S.caseId = choice.caseId; save(); start(false); };
   $('btnContinue').onclick = () => { S = saved; start(true); };
   $('btnCase').onclick = casebook;
   $('btnLook').onclick = () => { RivenAR.askPermission(); openLive('look'); };
